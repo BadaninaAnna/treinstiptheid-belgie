@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Treinstiptheid België</title>
+<meta name="description" content="Stiptheid van de treinen in België per station, per lijn en per uur, op basis van de open data van Infrabel. Automatisch bijgewerkt.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://badaninaanna.github.io/treinstiptheid-belgie/">
+<meta property="og:title" content="Treinstiptheid België: per station, lijn en uur">
+<meta property="og:description" content="Dagelijks bijgewerkt dashboard op basis van de ruwe stiptheidsgegevens van Infrabel, met SQL (DuckDB) en Python.">
+<meta property="og:image" content="https://badaninaanna.github.io/treinstiptheid-belgie/preview.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:locale" content="nl_BE">
+<meta name="author" content="Anna Badanina">
+<meta name="twitter:card" content="summary_large_image">
+<script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f4f3f0; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --ink-3: #7a7974;
+  --rule: #e4e3df; --accent: #2a78d6; --accent-2: #eb6834; --line-muted: #c9c8c2;
+  --seq: "#0d3a73,#1c5cab,#3987e5,#86b6ef,#cde2fb";
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #111110; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --ink-3: #93928a;
+    --rule: #33332f; --accent: #3987e5; --accent-2: #d95926; --line-muted: #55544f;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #111110; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --ink-3: #93928a;
+  --rule: #33332f; --accent: #3987e5; --accent-2: #d95926; --line-muted: #55544f;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 "Segoe UI", system-ui, -apple-system, sans-serif; }
+main { max-width: 1240px; margin: 0 auto; padding: 24px 16px 48px; }
+h1 { font-size: 28px; line-height: 1.2; margin: 0 0 6px; }
+h2 { font-size: 18px; margin: 0 0 4px; }
+.sub, .noot { color: var(--ink-2); }
+.noot { font-size: 13px; }
+a { color: var(--accent); }
+header.top { display: flex; flex-wrap: wrap; gap: 16px; justify-content: space-between; align-items: end; margin-bottom: 20px; }
+.tegels { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.tegel, .kaart { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; }
+.tegel { padding: 14px 16px; }
+.tegel .lab { font-size: 13px; color: var(--ink-2); }
+.tegel .val { font-size: 30px; font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.tegel .val small { font-size: 14px; font-weight: 400; color: var(--ink-2); }
+.tegel .ref { font-size: 12px; color: var(--ink-3); }
+.raster { display: grid; grid-template-columns: 1fr; gap: 16px; margin-bottom: 16px; }
+@media (min-width: 900px) { .raster.twee { grid-template-columns: 1fr 1fr; align-items: start; } }
+.kaart { padding: 16px; min-width: 0; }
+.kaart header { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: start; margin: 0 0 8px; }
+.grafiek { width: 100%; height: 360px; }
+.kiesbalk { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 4px 0 12px; }
+select { font: inherit; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--rule); background: var(--surface); color: var(--ink); }
+footer { margin-top: 28px; font-size: 13px; color: var(--ink-2); }
+footer li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+<main>
+  <header class="top">
+    <div>
+      <h1>Treinstiptheid België</h1>
+      <div class="sub">Per station, per lijn en per uur · ruwe stiptheidsgegevens van Infrabel · automatisch bijgewerkt</div>
+    </div>
+    <div class="noot" style="text-align:right" id="bijgewerkt"></div>
+  </header>
+
+  <section class="tegels" id="tegels"></section>
+
+  <div class="kiesbalk">
+    <label for="station"><b>Station:</b></label>
+    <select id="station"></select>
+    <span class="noot">Antwerpse regio en grote knooppunten</span>
+  </div>
+
+  <div class="raster twee">
+    <section class="kaart">
+      <header><div><h2 id="t-dag"></h2><div class="noot">Aandeel treinen dat met minder dan 6 minuten vertraging aankomt</div></div></header>
+      <div id="g-dag" class="grafiek"></div>
+    </section>
+    <section class="kaart">
+      <header><div><h2 id="t-uur"></h2><div class="noot" id="n-uur"></div></div></header>
+      <div id="g-uur" class="grafiek"></div>
+    </section>
+  </div>
+  <section class="kaart" style="margin-bottom:16px">
+    <header><div><h2 id="t-off"></h2><div class="noot">Officiële maandcijfers van Infrabel per stopplaats, sinds 2023</div></div></header>
+    <div id="g-off" class="grafiek" style="height:300px"></div>
+  </section>
+
+  <div class="raster twee">
+    <section class="kaart">
+      <header><div><h2>Stiptheid per station</h2><div class="noot" id="n-kaart"></div></div></header>
+      <div id="g-kaart" class="grafiek" style="height:440px"></div>
+    </section>
+    <section class="kaart">
+      <header><div><h2>Minst stipte stations</h2><div class="noot" id="n-rang"></div></div></header>
+      <div id="g-rang" class="grafiek" style="height:440px"></div>
+    </section>
+    <section class="kaart">
+      <header><div><h2>Stiptheid per treinlijn</h2><div class="noot" id="n-rel"></div></div></header>
+      <div id="g-rel" class="grafiek" style="height:560px"></div>
+    </section>
+    <section class="kaart">
+      <header><div><h2>Oorzaken van vertraging</h2><div class="noot" id="n-oorz"></div></div></header>
+      <div id="g-oorz" class="grafiek" style="height:560px"></div>
+    </section>
+  </div>
+
+  <footer>
+    <h2 style="font-size:15px">Methode</h2>
+    <ul>
+      <li><b>Bron:</b> <a href="https://opendata.infrabel.be">open data van Infrabel</a> (CC0): ruwe stiptheidsgegevens per trein en per meetpunt (dag D-1 en maandarchieven), officiële maandstiptheid per stopplaats en vertragingsoorzaken.</li>
+      <li><b>Stipt:</b> aankomst met minder dan 6 minuten vertraging, zoals Infrabel het definieert. Alleen officiële stopplaatsen tellen mee; afgeschafte treinen zitten niet in de ruwe gegevens.</li>
+      <li><b>Verwerking:</b> SQL in DuckDB, Python en GitHub Actions; de pagina wordt meerdere keren per dag opnieuw gebouwd, de gegevens lopen tot en met gisteren.</li>
+      <li>Code en data: <a href="https://github.com/BadaninaAnna/treinstiptheid-belgie">github.com/BadaninaAnna/treinstiptheid-belgie</a> · Anna Badanina</li>
+    </ul>
+  </footer>
+</main>
+
+<script id="data" type="application/json">/*__DATA__*/null</script>
+<script>
+const D = JSON.parse(document.getElementById("data").textContent);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const f1 = v => v == null ? "–" : v.toLocaleString("nl-BE", {minimumFractionDigits: 1, maximumFractionDigits: 1});
+const nl = v => v.toLocaleString("nl-BE");
+let station = "ANTWERPEN-CENTRAAL";
+const naam = c => (D.focus.find(f => f.code === c) || {naam: c}).naam;
+const CONFIG = {displayModeBar: false, responsive: true};
+
+function layout(extra = {}) {
+  const as = {gridcolor: css("--rule"), linecolor: css("--rule"), zeroline: false};
+  return Object.assign({
+    margin: {l: 48, r: 12, t: 8, b: 40}, paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
+    font: {family: "Segoe UI, system-ui, sans-serif", size: 12, color: css("--ink-2")},
+    xaxis: Object.assign({}, as), yaxis: Object.assign({}, as),
+    hoverlabel: {bgcolor: css("--surface"), bordercolor: css("--rule"), font: {color: css("--ink")}},
+    showlegend: true, legend: {orientation: "h", y: 1.12, x: 0},
+  }, extra);
+}
+
+function kop() {
+  const g = D.gisteren;
+  document.getElementById("bijgewerkt").innerHTML = `Gegevens tot en met <b>${D.laatste_dag}</b><br>Pagina bijgewerkt ${D.bijgewerkt}`;
+  const t = [
+    ["Stiptheid netwerk gisteren", `${f1(g.netwerk)} <small>%</small>`, `${nl(g.metingen)} aankomsten · ${nl(g.treinen)} treinen`],
+    ["Antwerpen-Centraal gisteren", `${f1(g.stations["ANTWERPEN-CENTRAAL"])} <small>%</small>`, "aankomsten met < 6 min vertraging"],
+    ["Gemiddelde vertraging", `${f1(g.gem_vertraging)} <small>min</small>`, "per aankomst, te vroeg telt als 0"],
+    ["Zwaar vertraagd (≥ 15 min)", `${nl(g.zwaar)}`, "aankomsten gisteren"],
+  ];
+  document.getElementById("tegels").innerHTML = t.map(([l, v, r]) =>
+    `<div class="tegel"><div class="lab">${l}</div><div class="val">${v}</div><div class="ref">${r}</div></div>`).join("");
+  const sel = document.getElementById("station");
+  sel.innerHTML = D.focus.map(f => `<option value="${f.code}"${f.code === station ? " selected" : ""}>${f.naam}</option>`).join("");
+  sel.onchange = () => { station = sel.value; perStation(); };
+}
+
+function perStation() {
+  const n = naam(station);
+  document.getElementById("t-dag").textContent = `${n}: stiptheid per dag`;
+  document.getElementById("t-uur").textContent = `${n}: stiptheid per uur van de dag`;
+  document.getElementById("t-off").textContent = `${n}: officiële stiptheid per maand`;
+  document.getElementById("n-uur").textContent = `Gepland aankomstuur, ${D.venster}`;
+  const lijn = (y, nm, kleur, breed, x) => ({x, y, name: nm, type: "scatter", mode: "lines",
+    line: {color: kleur, width: breed}, connectgaps: false, hovertemplate: `${nm}<br>%{x}: %{y:.1f} %<extra></extra>`});
+  Plotly.react("g-dag", [lijn(D.netwerk_dag, "Netwerk", css("--line-muted"), 1.5, D.dagen),
+                         lijn(D.station_dag[station], n, css("--accent"), 2.2, D.dagen)],
+    layout({yaxis: {title: "% stipt", gridcolor: css("--rule"), range: [60, 100]},
+            xaxis: {gridcolor: css("--rule"), tickformat: "%d-%m"}}), CONFIG);
+  const uren = [...Array(24).keys()];
+  const p = (s) => uren.map(u => (D.profiel[s] || {})[u] ?? null);
+  Plotly.react("g-uur", [
+    {x: uren, y: p("NETWERK"), name: "Netwerk", type: "scatter", mode: "lines+markers", line: {color: css("--line-muted"), width: 1.5}, hovertemplate: "Netwerk, %{x}u: %{y:.1f} %<extra></extra>"},
+    {x: uren, y: p(station), name: n, type: "scatter", mode: "lines+markers", line: {color: css("--accent"), width: 2.2}, hovertemplate: `${n}, %{x}u: %{y:.1f} %<extra></extra>`}],
+    layout({yaxis: {title: "% stipt", gridcolor: css("--rule")}, xaxis: {title: "uur", dtick: 2, gridcolor: css("--rule")}}), CONFIG);
+  Plotly.react("g-off", [lijn(D.officieel.reeksen.NETWERK, "Netwerk", css("--line-muted"), 1.5, D.officieel.maanden),
+                         lijn(D.officieel.reeksen[station], n, css("--accent"), 2.2, D.officieel.maanden)],
+    layout({yaxis: {title: "% stipt", gridcolor: css("--rule")}, xaxis: {gridcolor: css("--rule"), type: "category", nticks: 12}}), CONFIG);
+}
+
+function netwerk() {
+  const s = D.stations30;
+  document.getElementById("n-kaart").textContent = `Stations met minstens 300 aankomsten, ${D.venster}`;
+  const seq = css("--seq").replace(/"/g, "").split(",");
+  Plotly.react("g-kaart", [{type: "scattermapbox", lat: s.map(x => x.lat), lon: s.map(x => x.lon), mode: "markers",
+    marker: {size: 9, opacity: 0.9, color: s.map(x => x.stiptheid),
+             colorscale: seq.map((c, i) => [i / (seq.length - 1), c]), cmin: 80, cmax: 98,
+             colorbar: {thickness: 10, len: 0.8, title: {text: "% stipt", side: "right"}, outlinewidth: 0}},
+    text: s.map(x => `<b>${x.naam}</b><br>${f1(x.stiptheid)} % stipt<br>${nl(x.metingen)} aankomsten<br>gem. ${f1(x.gem)} min vertraging`),
+    hovertemplate: "%{text}<extra></extra>"}],
+    layout({margin: {l: 0, r: 0, t: 0, b: 0}, showlegend: false,
+            mapbox: {style: "open-street-map", center: {lat: 50.75, lon: 4.45}, zoom: 6.4}}), CONFIG);
+
+  const r = [...s].filter(x => x.metingen >= 1000).sort((a, b) => a.stiptheid - b.stiptheid).slice(0, 15).reverse();
+  document.getElementById("n-rang").textContent = `Stations met minstens 1 000 aankomsten, ${D.venster}`;
+  Plotly.react("g-rang", [{type: "bar", orientation: "h", y: r.map(x => x.naam), x: r.map(x => x.stiptheid),
+    marker: {color: css("--accent")}, customdata: r.map(x => [x.metingen, x.gem]),
+    hovertemplate: "<b>%{y}</b><br>%{x:.1f} % stipt<br>%{customdata[0]:,} aankomsten<br>gem. %{customdata[1]:.1f} min<extra></extra>"}],
+    layout({showlegend: false, margin: {l: 190, r: 16, t: 8, b: 40},
+            xaxis: {title: "% stipt", gridcolor: css("--rule"), range: [Math.floor(Math.min(...r.map(x => x.stiptheid)) / 5) * 5 - 5, 100]},
+            yaxis: {automargin: true, gridcolor: "rgba(0,0,0,0)"}}), CONFIG);
+
+  const rel = D.relaties30.slice(0, 20).reverse();
+  document.getElementById("n-rel").textContent = `De 20 minst stipte lijnen (minstens 1 000 aankomsten), ${D.venster}; oranje = andere operator dan NMBS`;
+  Plotly.react("g-rel", [{type: "bar", orientation: "h", y: rel.map(x => x.label), x: rel.map(x => x.stiptheid),
+    marker: {color: rel.map(x => x.operator === "SNCB/NMBS" ? css("--accent") : css("--accent-2"))},
+    customdata: rel.map(x => [x.operator, x.metingen]),
+    hovertemplate: "<b>%{y}</b> (%{customdata[0]})<br>%{x:.1f} % stipt<br>%{customdata[1]:,} aankomsten<extra></extra>"}],
+    layout({showlegend: false, margin: {l: 70, r: 16, t: 8, b: 40},
+            xaxis: {title: "% stipt", gridcolor: css("--rule"), range: [Math.floor(Math.min(...rel.map(x => x.stiptheid)) / 10) * 10, 100]},
+            yaxis: {automargin: true, gridcolor: "rgba(0,0,0,0)"}}), CONFIG);
+
+  const o = D.oorzaken;
+  document.getElementById("n-oorz").textContent = `Aandeel in het stiptheidsverlies volgens Infrabel, ${o.periode}`;
+  Plotly.react("g-oorz", [{type: "bar", orientation: "h", y: o.labels, x: o.aandeel, marker: {color: css("--accent")},
+    text: o.aandeel.map(v => `${f1(v)} %`), textposition: "outside", cliponaxis: false,
+    hovertemplate: "<b>%{y}</b><br>%{x:.1f} % van het stiptheidsverlies<extra></extra>"}],
+    layout({showlegend: false, margin: {l: 230, r: 50, t: 8, b: 40}, xaxis: {title: "% van het verlies", gridcolor: css("--rule")},
+            yaxis: {automargin: true, gridcolor: "rgba(0,0,0,0)"}}), CONFIG);
+}
+
+kop(); perStation(); netwerk();
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { perStation(); netwerk(); });
+</script>
+</body>
+</html>

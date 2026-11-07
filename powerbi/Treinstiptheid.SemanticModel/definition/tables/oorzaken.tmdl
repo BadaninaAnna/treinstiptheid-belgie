@@ -1,0 +1,81 @@
+table oorzaken
+	lineageTag: 28909621-023b-4dc3-888c-e0a8f98daa7d
+
+	measure 'Aandeel in verlies' = DIVIDE ( SUM ( oorzaken[totaal_onstipte_metingen] ), CALCULATE ( SUM ( oorzaken[totaal_onstipte_metingen] ), REMOVEFILTERS ( oorzaken[verantwoordelijk] ) ) )
+		formatString: 0.0%
+		displayFolder: Officieel
+		lineageTag: 77d68bec-7030-4e89-b5e0-a67c249c1edb
+
+	column maand
+		dataType: string
+		lineageTag: ade4e34e-cdfd-4c3d-a321-ba38a104c055
+		summarizeBy: none
+		sourceColumn: maand
+
+		annotation SummarizationSetBy = Automatic
+
+	column verantwoordelijk
+		dataType: string
+		lineageTag: 0e33dfaa-a9a9-4090-a0e5-9621b1bc923c
+		summarizeBy: none
+		sourceColumn: verantwoordelijk
+
+		annotation SummarizationSetBy = Automatic
+
+	column totaal_onstipte_metingen
+		dataType: double
+		formatString: #,0
+		lineageTag: d4e3a666-54c8-4c1c-84fc-1f184c33fbb8
+		summarizeBy: sum
+		sourceColumn: totaal_onstipte_metingen
+
+		annotation SummarizationSetBy = Automatic
+
+	column totaal_aantal_metingen
+		dataType: double
+		formatString: #,0
+		lineageTag: a12dd741-ae82-420a-82df-45ceb6e2e804
+		summarizeBy: sum
+		sourceColumn: totaal_aantal_metingen
+
+		annotation SummarizationSetBy = Automatic
+
+	column stiptheidsverlies
+		dataType: double
+		formatString: 0.00
+		lineageTag: bd44e31f-383d-46bf-979f-3e2bf771e150
+		summarizeBy: none
+		sourceColumn: stiptheidsverlies
+
+		annotation SummarizationSetBy = Automatic
+
+	column aandeel
+		dataType: double
+		formatString: 0.0
+		lineageTag: 9cebece7-27e2-4c95-becb-f39a21d8c664
+		summarizeBy: none
+		sourceColumn: aandeel
+
+		annotation SummarizationSetBy = Automatic
+
+	column maand_datum
+		dataType: dateTime
+		formatString: yyyy-mm
+		lineageTag: f5bd42e2-d486-4ac6-9f75-99938a38d7f8
+		summarizeBy: none
+		sourceColumn: maand_datum
+
+		annotation SummarizationSetBy = Automatic
+
+	partition oorzaken = m
+		mode: import
+		source =
+			let
+			    Inhoud = Csv.Document ( Web.Contents ( DataUrl & "officieel/oorzaken_per_maand.csv" ), [Delimiter = ",", Encoding = 65001, QuoteStyle = QuoteStyle.Csv] ),
+			    Koppen = Table.PromoteHeaders ( Inhoud, [PromoteAllScalars = true] ),
+			    Types = Table.TransformColumnTypes ( Koppen, {{"maand", type text}, {"verantwoordelijk", type text}, {"totaal_onstipte_metingen", type number}, {"totaal_aantal_metingen", type number}, {"stiptheidsverlies", type number}, {"aandeel", type number}}, "en-US" ),
+			Datum = Table.AddColumn ( Types, "maand_datum", each Date.FromText ( [maand] & "-01", [Culture = "en-US", Format = "yyyy-MM-dd"] ), type date )
+			in
+			    Datum
+
+	annotation PBI_ResultType = Table

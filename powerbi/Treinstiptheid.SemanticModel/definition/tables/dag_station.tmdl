@@ -1,0 +1,133 @@
+table dag_station
+	lineageTag: 386802bf-6074-40af-b77a-00668edefd65
+
+	measure Stiptheid = DIVIDE ( SUM ( dag_station[stipt] ), SUM ( dag_station[metingen] ) )
+		formatString: 0.0%
+		displayFolder: Stiptheid
+		lineageTag: 1967616f-0353-4c22-8d51-05c6f3048643
+
+	measure 'Stiptheid netwerk' = CALCULATE ( [Stiptheid], REMOVEFILTERS ( stations ) )
+		formatString: 0.0%
+		displayFolder: Stiptheid
+		lineageTag: 41b13000-8f03-4ebd-b918-97fb1a904900
+
+	measure 'Verschil met netwerk (pp)' = ( [Stiptheid] - [Stiptheid netwerk] ) * 100
+		formatString: +0.0;-0.0;0.0
+		displayFolder: Stiptheid
+		lineageTag: 9e13ad74-b9f5-4f83-8fd8-ba1e2a2885d7
+
+	measure Aankomsten = SUM ( dag_station[metingen] )
+		formatString: #,0
+		displayFolder: Stiptheid
+		lineageTag: 5bc0e293-31b7-4b20-a5b0-1a901ad9567e
+
+	measure 'Gem. vertraging (min)' = DIVIDE ( SUM ( dag_station[vertragingsminuten] ), SUM ( dag_station[metingen] ) )
+		formatString: 0.00
+		displayFolder: Stiptheid
+		lineageTag: 3696d16d-1653-40c1-9d5c-b0df6fe651d2
+
+	measure 'Zwaar vertraagd' = SUM ( dag_station[zwaar_vertraagd] )
+		formatString: #,0
+		displayFolder: Stiptheid
+		lineageTag: 5c259d7b-6d01-4139-9b8d-419df833a686
+
+	measure 'Laatste dag' = CALCULATE ( MAX ( dag_station[datum] ), REMOVEFILTERS () )
+		formatString: dd-mm-yyyy
+		displayFolder: Stiptheid
+		lineageTag: 5919e911-741e-4b14-8480-3b3fbaebe5e5
+
+	measure 'Stiptheid laatste dag' =
+			VAR d = [Laatste dag]
+			RETURN CALCULATE ( [Stiptheid], REMOVEFILTERS ( Datum ), dag_station[datum] = d )
+		formatString: 0.0%
+		displayFolder: Stiptheid
+		lineageTag: a3c5fe75-cf4e-4123-884f-cc200d515664
+
+	column datum
+		dataType: dateTime
+		formatString: dd-mm-yyyy
+		lineageTag: 1a3a6109-5d91-4061-b70e-c8cf9d03d0e4
+		summarizeBy: none
+		sourceColumn: datum
+
+		annotation SummarizationSetBy = Automatic
+
+	column station
+		dataType: string
+		lineageTag: c8f25e3b-bae1-42d0-867f-a55db52730b2
+		summarizeBy: none
+		sourceColumn: station
+
+		annotation SummarizationSetBy = Automatic
+
+	column metingen
+		dataType: int64
+		formatString: #,0
+		lineageTag: 4a7f9694-652c-4164-8cbc-32d5bbfbd39e
+		summarizeBy: sum
+		sourceColumn: metingen
+
+		annotation SummarizationSetBy = Automatic
+
+	column stipt
+		dataType: int64
+		formatString: #,0
+		lineageTag: 1fcf8acc-20c3-46ce-954b-0ea5b6282ea7
+		summarizeBy: sum
+		sourceColumn: stipt
+
+		annotation SummarizationSetBy = Automatic
+
+	column gem_vertraging_min
+		dataType: double
+		formatString: 0.00
+		lineageTag: 6c58e594-782f-4620-a494-28760034e1fe
+		summarizeBy: none
+		sourceColumn: gem_vertraging_min
+
+		annotation SummarizationSetBy = Automatic
+
+	column p90_vertraging_min
+		dataType: double
+		formatString: 0.00
+		lineageTag: b53cf38f-921a-4d8b-a1a9-313e0d19c37f
+		summarizeBy: none
+		sourceColumn: p90_vertraging_min
+
+		annotation SummarizationSetBy = Automatic
+
+	column zwaar_vertraagd
+		dataType: int64
+		formatString: #,0
+		lineageTag: 8f65a9af-db99-43ef-ba2a-0fa22d3739df
+		summarizeBy: sum
+		sourceColumn: zwaar_vertraagd
+
+		annotation SummarizationSetBy = Automatic
+
+	column vertragingsminuten
+		dataType: double
+		formatString: #,0
+		lineageTag: 86b6fcf7-fb38-4783-8218-ddbab5fed0f6
+		summarizeBy: sum
+		sourceColumn: vertragingsminuten
+
+		annotation SummarizationSetBy = Automatic
+
+	partition dag_station = m
+		mode: import
+		source =
+			let
+			    Vandaag = Date.From ( DateTime.LocalNow () ),
+			    Start = #date ( 2026, 8, 1 ),
+			    Aantal = ( Date.Year ( Vandaag ) - 2026 ) * 12 + Date.Month ( Vandaag ) - 8 + 1,
+			    Maanden = List.Transform ( { 0 .. Aantal - 1 }, each Date.ToText ( Date.AddMonths ( Start, _ ), "yyyy-MM", "en-US" ) ),
+			    Lees = ( m as text ) =>
+			        try Table.PromoteHeaders ( Csv.Document ( Web.Contents ( DataUrl & "dag/dag_station/" & m & ".csv" ), [Delimiter = ",", Encoding = 65001] ), [PromoteAllScalars = true] )
+			        otherwise null,
+			    Samen = Table.Combine ( List.RemoveNulls ( List.Transform ( Maanden, Lees ) ) ),
+			    Types = Table.TransformColumnTypes ( Samen, {{"datum", type date}, {"station", type text}, {"metingen", Int64.Type}, {"stipt", Int64.Type}, {"gem_vertraging_min", type number}, {"p90_vertraging_min", type number}, {"zwaar_vertraagd", Int64.Type}, {"vertragingsminuten", type number}}, "en-US" )
+			in
+			    Types
+
+	annotation PBI_ResultType = Table

@@ -1,0 +1,4 @@
+expression DataUrl = "https://raw.githubusercontent.com/BadaninaAnna/treinstiptheid-belgie/main/data/" meta [IsParameterQuery=true, Type="Text", IsParameterQueryRequired=true]
+	lineageTag: 05e76ea9-8399-4aa2-9b4c-1a8f444d2baa
+
+	annotation PBI_ResultType = Text

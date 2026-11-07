@@ -1,0 +1,31 @@
+relationship 4f33183f-3d49-4168-9eba-5e3ffddf3892
+	fromColumn: dag_station.station
+	toColumn: stations.station
+
+relationship eb6b9404-e153-4dee-ba2e-504abec88523
+	fromColumn: dag_uur.station
+	toColumn: stations.station
+
+relationship 88912eea-18bc-451d-96bf-f04bc10b5dd6
+	fromColumn: officieel.station
+	toColumn: stations.station
+
+relationship ed620cb5-a26b-47ed-8fd3-9f05a57ec817
+	fromColumn: dag_station.datum
+	toColumn: Datum.Date
+
+relationship b3bb297e-5138-4ada-be73-f5496965c479
+	fromColumn: dag_relatie.datum
+	toColumn: Datum.Date
+
+relationship 1a10ae18-aab9-4767-817a-005b62430a9f
+	fromColumn: dag_uur.datum
+	toColumn: Datum.Date
+
+relationship 364a064e-922a-4430-855f-e12754615e9f
+	fromColumn: officieel.maand_datum
+	toColumn: Datum.Date
+
+relationship a27ea60f-8458-4c5a-9150-b98c9b28c239
+	fromColumn: oorzaken.maand_datum
+	toColumn: Datum.Date

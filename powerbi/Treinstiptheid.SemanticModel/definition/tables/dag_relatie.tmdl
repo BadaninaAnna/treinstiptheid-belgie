@@ -1,0 +1,100 @@
+table dag_relatie
+	lineageTag: 384d585f-e344-44d4-8678-e523eea73eac
+
+	measure 'Stiptheid lijn' = DIVIDE ( SUM ( dag_relatie[stipt] ), SUM ( dag_relatie[metingen] ) )
+		formatString: 0.0%
+		displayFolder: Lijnen
+		lineageTag: b47dabcc-f4ce-4ce0-98a6-e953bc4ed87e
+
+	measure 'Aankomsten lijn' = SUM ( dag_relatie[metingen] )
+		formatString: #,0
+		displayFolder: Lijnen
+		lineageTag: 8ef64f5d-9bde-49cf-b98e-06196d0a3fa8
+
+	column datum
+		dataType: dateTime
+		formatString: dd-mm-yyyy
+		lineageTag: 60828d12-bbf7-4c2c-8915-8ff3374b7b71
+		summarizeBy: none
+		sourceColumn: datum
+
+		annotation SummarizationSetBy = Automatic
+
+	column relatie
+		dataType: string
+		lineageTag: 6a8922db-9f59-4993-a134-3c0294597b67
+		summarizeBy: none
+		sourceColumn: relatie
+
+		annotation SummarizationSetBy = Automatic
+
+	column operator
+		dataType: string
+		lineageTag: b5b64209-0364-46c8-b4a7-f15a60e9aa8f
+		summarizeBy: none
+		sourceColumn: operator
+
+		annotation SummarizationSetBy = Automatic
+
+	column metingen
+		dataType: int64
+		formatString: #,0
+		lineageTag: 6ba4e25c-c57a-4d9d-be26-d21dff062076
+		summarizeBy: sum
+		sourceColumn: metingen
+
+		annotation SummarizationSetBy = Automatic
+
+	column stipt
+		dataType: int64
+		formatString: #,0
+		lineageTag: a1388cae-9ce3-47c6-ad69-1dc1c292f12d
+		summarizeBy: sum
+		sourceColumn: stipt
+
+		annotation SummarizationSetBy = Automatic
+
+	column gem_vertraging_min
+		dataType: double
+		formatString: 0.00
+		lineageTag: ff50b809-d930-4d19-9bb8-285f7c14b103
+		summarizeBy: none
+		sourceColumn: gem_vertraging_min
+
+		annotation SummarizationSetBy = Automatic
+
+	column zwaar_vertraagd
+		dataType: int64
+		formatString: #,0
+		lineageTag: b532b47f-ccd6-4c36-a85d-8ee7ea814e61
+		summarizeBy: sum
+		sourceColumn: zwaar_vertraagd
+
+		annotation SummarizationSetBy = Automatic
+
+	column treinen
+		dataType: int64
+		formatString: #,0
+		lineageTag: b3e0a39d-ba6f-4191-8575-7009c6881aff
+		summarizeBy: sum
+		sourceColumn: treinen
+
+		annotation SummarizationSetBy = Automatic
+
+	partition dag_relatie = m
+		mode: import
+		source =
+			let
+			    Vandaag = Date.From ( DateTime.LocalNow () ),
+			    Start = #date ( 2026, 8, 1 ),
+			    Aantal = ( Date.Year ( Vandaag ) - 2026 ) * 12 + Date.Month ( Vandaag ) - 8 + 1,
+			    Maanden = List.Transform ( { 0 .. Aantal - 1 }, each Date.ToText ( Date.AddMonths ( Start, _ ), "yyyy-MM", "en-US" ) ),
+			    Lees = ( m as text ) =>
+			        try Table.PromoteHeaders ( Csv.Document ( Web.Contents ( DataUrl & "dag/dag_relatie/" & m & ".csv" ), [Delimiter = ",", Encoding = 65001] ), [PromoteAllScalars = true] )
+			        otherwise null,
+			    Samen = Table.Combine ( List.RemoveNulls ( List.Transform ( Maanden, Lees ) ) ),
+			    Types = Table.TransformColumnTypes ( Samen, {{"datum", type date}, {"relatie", type text}, {"operator", type text}, {"metingen", Int64.Type}, {"stipt", Int64.Type}, {"gem_vertraging_min", type number}, {"zwaar_vertraagd", Int64.Type}, {"treinen", Int64.Type}}, "en-US" )
+			in
+			    Types
+
+	annotation PBI_ResultType = Table

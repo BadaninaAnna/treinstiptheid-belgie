@@ -1,0 +1,117 @@
+table officieel
+	lineageTag: eec2220a-efa1-4d89-853b-8819930c6139
+
+	measure 'Officiële stiptheid' = DIVIDE ( SUM ( officieel[stipt] ), SUM ( officieel[metingen] ) )
+		formatString: 0.0%
+		displayFolder: Officieel
+		lineageTag: 496005e0-7efe-4f51-9beb-b0ba6f593b95
+
+	measure 'Officiële stiptheid netwerk' = CALCULATE ( [Officiële stiptheid], REMOVEFILTERS ( stations ) )
+		formatString: 0.0%
+		displayFolder: Officieel
+		lineageTag: bf8fc48a-f6b5-4295-83ad-4fbcfb841f10
+
+	measure 'Verschil eigen - officieel (pp)' = IF ( NOT ISBLANK ( [Stiptheid] ) && NOT ISBLANK ( [Officiële stiptheid] ), ( [Stiptheid] - [Officiële stiptheid] ) * 100 )
+		formatString: +0.0;-0.0;0.0
+		displayFolder: Officieel
+		lineageTag: 222afc65-970f-4c30-a4a6-28cdfa20a115
+
+	column maand
+		dataType: string
+		lineageTag: 427f7263-68a4-4456-8da4-211f9b107a52
+		summarizeBy: none
+		sourceColumn: maand
+
+		annotation SummarizationSetBy = Automatic
+
+	column station
+		dataType: string
+		lineageTag: 3f531195-83f9-4c87-a34d-ab1ddb9bb8e8
+		summarizeBy: none
+		sourceColumn: station
+
+		annotation SummarizationSetBy = Automatic
+
+	column ptcar_no
+		dataType: int64
+		formatString: 0
+		lineageTag: bed89f11-2a14-4fc0-bc63-c15fbac867af
+		summarizeBy: none
+		sourceColumn: ptcar_no
+
+		annotation SummarizationSetBy = Automatic
+
+	column classificatie
+		dataType: string
+		lineageTag: 74cc377a-81b3-4ce4-a622-9309c55dc12b
+		summarizeBy: none
+		sourceColumn: classificatie
+
+		annotation SummarizationSetBy = Automatic
+
+	column stiptheid
+		dataType: double
+		formatString: 0.0
+		lineageTag: bbc51c23-baef-422a-80c5-ad7c70e3f2c6
+		summarizeBy: none
+		sourceColumn: stiptheid
+
+		annotation SummarizationSetBy = Automatic
+
+	column metingen
+		dataType: double
+		formatString: #,0
+		lineageTag: e815a798-e9f7-4579-a6a0-8e13398e069b
+		summarizeBy: sum
+		sourceColumn: metingen
+
+		annotation SummarizationSetBy = Automatic
+
+	column stipt
+		dataType: double
+		formatString: #,0
+		lineageTag: b005bf4f-f9ea-4670-ad49-204543347ae1
+		summarizeBy: sum
+		sourceColumn: stipt
+
+		annotation SummarizationSetBy = Automatic
+
+	column lat
+		dataType: double
+		formatString: 0.00000
+		lineageTag: 49b6a260-ba4e-4c30-9db2-eedb9d817ae0
+		summarizeBy: none
+		sourceColumn: lat
+
+		annotation SummarizationSetBy = Automatic
+
+	column lon
+		dataType: double
+		formatString: 0.00000
+		lineageTag: bbd9b4ca-9e1e-4390-a7e2-af49398dfc92
+		summarizeBy: none
+		sourceColumn: lon
+
+		annotation SummarizationSetBy = Automatic
+
+	column maand_datum
+		dataType: dateTime
+		formatString: yyyy-mm
+		lineageTag: 4172e650-69ce-4f2d-939f-41b585ef2b68
+		summarizeBy: none
+		sourceColumn: maand_datum
+
+		annotation SummarizationSetBy = Automatic
+
+	partition officieel = m
+		mode: import
+		source =
+			let
+			    Inhoud = Csv.Document ( Web.Contents ( DataUrl & "officieel/stiptheid_per_stopplaats.csv" ), [Delimiter = ",", Encoding = 65001, QuoteStyle = QuoteStyle.Csv] ),
+			    Koppen = Table.PromoteHeaders ( Inhoud, [PromoteAllScalars = true] ),
+			    Types = Table.TransformColumnTypes ( Koppen, {{"maand", type text}, {"station", type text}, {"ptcar_no", Int64.Type}, {"classificatie", type text}, {"stiptheid", type number}, {"metingen", type number}, {"stipt", type number}, {"lat", type number}, {"lon", type number}}, "en-US" ),
+			Datum = Table.AddColumn ( Types, "maand_datum", each Date.FromText ( [maand] & "-01", [Culture = "en-US", Format = "yyyy-MM-dd"] ), type date )
+			in
+			    Datum
+
+	annotation PBI_ResultType = Table

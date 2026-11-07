@@ -1,0 +1,68 @@
+table stations
+	lineageTag: 70b2de23-b09c-4dc2-a855-e39a8564c159
+
+	column station
+		dataType: string
+		lineageTag: 309061a3-0455-47ee-8b77-38640f093140
+		summarizeBy: none
+		sourceColumn: station
+
+		annotation SummarizationSetBy = Automatic
+
+	column ptcar_no
+		dataType: int64
+		formatString: 0
+		lineageTag: 29d46412-aa68-4147-a623-776191c6c89f
+		summarizeBy: none
+		sourceColumn: ptcar_no
+
+		annotation SummarizationSetBy = Automatic
+
+	column classificatie
+		dataType: string
+		lineageTag: 007bdbce-4314-4f4c-901c-dae410f88f2c
+		summarizeBy: none
+		sourceColumn: classificatie
+
+		annotation SummarizationSetBy = Automatic
+
+	column lat
+		dataType: double
+		dataCategory: Latitude
+		formatString: 0.00000
+		lineageTag: 2a1d1dbe-13fa-498c-a3d5-0faf748b0891
+		summarizeBy: none
+		sourceColumn: lat
+
+		annotation SummarizationSetBy = Automatic
+
+	column lon
+		dataType: double
+		dataCategory: Longitude
+		formatString: 0.00000
+		lineageTag: 3dadf315-2810-4028-9f54-03cb33e56c2a
+		summarizeBy: none
+		sourceColumn: lon
+
+		annotation SummarizationSetBy = Automatic
+
+	column naam
+		dataType: string
+		lineageTag: 0f5fb378-21c0-4638-9234-4d496a458d51
+		summarizeBy: none
+		sourceColumn: naam
+
+		annotation SummarizationSetBy = Automatic
+
+	partition stations = m
+		mode: import
+		source =
+			let
+			    Inhoud = Csv.Document ( Web.Contents ( DataUrl & "stations.csv" ), [Delimiter = ",", Encoding = 65001, QuoteStyle = QuoteStyle.Csv] ),
+			    Koppen = Table.PromoteHeaders ( Inhoud, [PromoteAllScalars = true] ),
+			    Types = Table.TransformColumnTypes ( Koppen, {{"station", type text}, {"ptcar_no", Int64.Type}, {"classificatie", type text}, {"lat", type number}, {"lon", type number}}, "en-US" ),
+			Naam = Table.AddColumn ( Types, "naam", each Text.Proper ( [station] ), type text )
+			in
+			    Naam
+
+	annotation PBI_ResultType = Table

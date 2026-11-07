@@ -1,0 +1,83 @@
+table dag_uur
+	lineageTag: 757a54b1-7a8e-4d57-b416-7e548b3c5e04
+
+	measure 'Stiptheid per uur' = DIVIDE ( SUM ( dag_uur[stipt] ), SUM ( dag_uur[metingen] ) )
+		formatString: 0.0%
+		displayFolder: Uur
+		lineageTag: 0c7c55f3-c985-425a-bdf7-b5eccdb1b270
+
+	measure 'Stiptheid per uur netwerk' = CALCULATE ( DIVIDE ( SUM ( dag_uur[stipt] ), SUM ( dag_uur[metingen] ) ), REMOVEFILTERS ( stations ), dag_uur[station] = "NETWERK" )
+		formatString: 0.0%
+		displayFolder: Uur
+		lineageTag: 04207792-0271-4e83-9283-1a05713383b4
+
+	column datum
+		dataType: dateTime
+		formatString: dd-mm-yyyy
+		lineageTag: e5592e3d-a5b9-42ed-be3c-ef64bdac5995
+		summarizeBy: none
+		sourceColumn: datum
+
+		annotation SummarizationSetBy = Automatic
+
+	column station
+		dataType: string
+		lineageTag: 514c559b-67ef-4588-b74d-53b507afe2c2
+		summarizeBy: none
+		sourceColumn: station
+
+		annotation SummarizationSetBy = Automatic
+
+	column uur
+		dataType: int64
+		formatString: 0
+		lineageTag: 74a8dc8c-a5b0-4fc0-9b42-a8dc940c5865
+		summarizeBy: none
+		sourceColumn: uur
+
+		annotation SummarizationSetBy = Automatic
+
+	column metingen
+		dataType: int64
+		formatString: #,0
+		lineageTag: 17fc641a-d68e-4cf2-a93e-4008ac80abba
+		summarizeBy: sum
+		sourceColumn: metingen
+
+		annotation SummarizationSetBy = Automatic
+
+	column stipt
+		dataType: int64
+		formatString: #,0
+		lineageTag: 7629dd75-468a-4311-8e82-57ac2821e182
+		summarizeBy: sum
+		sourceColumn: stipt
+
+		annotation SummarizationSetBy = Automatic
+
+	column gem_vertraging_min
+		dataType: double
+		formatString: 0.00
+		lineageTag: 0e7eaae3-0e1c-4601-91ef-b66b23e20fc0
+		summarizeBy: none
+		sourceColumn: gem_vertraging_min
+
+		annotation SummarizationSetBy = Automatic
+
+	partition dag_uur = m
+		mode: import
+		source =
+			let
+			    Vandaag = Date.From ( DateTime.LocalNow () ),
+			    Start = #date ( 2026, 8, 1 ),
+			    Aantal = ( Date.Year ( Vandaag ) - 2026 ) * 12 + Date.Month ( Vandaag ) - 8 + 1,
+			    Maanden = List.Transform ( { 0 .. Aantal - 1 }, each Date.ToText ( Date.AddMonths ( Start, _ ), "yyyy-MM", "en-US" ) ),
+			    Lees = ( m as text ) =>
+			        try Table.PromoteHeaders ( Csv.Document ( Web.Contents ( DataUrl & "dag/dag_uur/" & m & ".csv" ), [Delimiter = ",", Encoding = 65001] ), [PromoteAllScalars = true] )
+			        otherwise null,
+			    Samen = Table.Combine ( List.RemoveNulls ( List.Transform ( Maanden, Lees ) ) ),
+			    Types = Table.TransformColumnTypes ( Samen, {{"datum", type date}, {"station", type text}, {"uur", Int64.Type}, {"metingen", Int64.Type}, {"stipt", Int64.Type}, {"gem_vertraging_min", type number}}, "en-US" )
+			in
+			    Types
+
+	annotation PBI_ResultType = Table
